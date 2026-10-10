@@ -175,44 +175,53 @@ check('latest story null', InstagramProfilesPage::latestStory(str_replace('17916
 check('latest story absent', InstagramProfilesPage::latestStory($posts, 'historycoolkids'), null);
 check('latest story, logged-out shell page', InstagramProfilesPage::latestStory('<html><title>Instagram</title></html>', 'historycoolkids'), null);
 
-// --- Stories from the API ---------------------------------------------------------------------------------------------
-$api = json_encode(['reels' => ['2461212201' => ['id' => '2461212201', 'items' => [
-	['pk' => '3456789012345678901', 'id' => '3456789012345678901_2461212201', 'taken_at' => 1791650000, 'media_type' => 1,
+// --- Stories from the stories page, as served to a logged-in browser -------------------------------------------------
+/** A logged-in stories page: the stories in the JSON of a script, as Instagram serializes its prefetched queries */
+function storiesPage(array $reels, int $padding = 30000): string {
+	$data = ['require' => [['ScheduledServerJS', 'handle', null, [['__bbox' => ['require' => [['RelayPrefetchedStreamCache', 'next', [],
+		['adp_PolarisStoriesV3ReelPageStandaloneQueryRelayPreloader_1', ['__bbox' => ['complete' => true, 'result' => ['data' =>
+		['xdt_api__v1__feed__reels_media' => ['reels_media' => $reels, 'unviewable_authors_infos' => []]]]]]]]]]]]]]];
+	return '<!DOCTYPE html><html><head><script type="application/json" data-sjs>{"require":[["qplTimingsServerJS",null,null,["1","tierOne"]]]}</script>'
+		. str_repeat('<script>/* bootloader */</script>', intdiv($padding, 33))
+		. '<script type="application/json" data-content-len="1" data-sjs>' . json_encode($data, JSON_UNESCAPED_SLASHES) . '</script></head><body></body></html>';
+}
+$items = [
+	['pk' => '3456789012345678901', 'id' => '3456789012345678901_2461212201', 'taken_at' => 1791650000, 'media_type' => 1, 'code' => 'DeU3E6uAn3S',
 		'image_versions2' => ['candidates' => [['width' => 1440, 'height' => 2560, 'url' => 'https://scontent.cdninstagram.com/big.jpg'],
 			['width' => 1080, 'height' => 1920, 'url' => 'https://scontent.cdninstagram.com/1080.jpg'],
 			['width' => 640, 'height' => 1138, 'url' => 'https://scontent.cdninstagram.com/640.jpg']]],
 		'original_width' => 1080, 'original_height' => 1920,
 		'story_link_stickers' => [['story_link' => ['url' => 'https://l.instagram.com/?u=https%3A%2F%2Fexample.com%2Fa%3Fb%3D1&e=AT0', 'link_title' => 'Read more']],
 			['story_link' => ['url' => 'javascript:alert(1)']]],
-		'story_feed_media' => [['media_code' => 'DeUuuMGCu0t']],
-		'reel_mentions' => [['user' => ['username' => 'NatGeo']]],
+		'story_feed_media' => [['x' => 0.5, 'y' => 0.5, 'media_code' => 'DeUuuMGCu0t', 'id' => '18150353107514787', 'product_type' => 'feed']],
+		'story_bloks_stickers' => [['bloks_sticker' => ['bloks_sticker_type' => 'mention', 'sticker_data' => ['ig_mention' => ['username' => 'NatGeo']]]]],
 		'story_hashtags' => [['hashtag' => ['name' => 'history']]],
 		'story_locations' => [['location' => ['name' => 'Boston']]]],
 	['pk' => 3456789012345678999, 'taken_at' => 1791656143, 'media_type' => 2,
-		'image_versions2' => ['candidates' => [['width' => 720, 'height' => 1280, 'url' => 'https://scontent.cdninstagram.com/cover.jpg']]],
-		'video_versions' => [['width' => 720, 'height' => 1280, 'url' => 'https://scontent.cdninstagram.com/v.mp4'],
-			['width' => 480, 'height' => 854, 'url' => 'https://scontent.cdninstagram.com/v480.mp4']]],
+		'image_versions2' => ['candidates' => [['width' => 640, 'height' => 1138, 'url' => 'https://scontent.cdninstagram.com/cover.jpg']]],
+		'video_versions' => [['type' => 101, 'url' => 'https://scontent.cdninstagram.com/v.mp4'], ['type' => 102, 'url' => 'https://scontent.cdninstagram.com/v480.mp4']],
+		'reel_mentions' => [['user' => ['username' => 'historycoolkids']]], 'story_link_stickers' => null, 'story_hashtags' => null,
+		'user' => ['pk' => '2461212201', 'username' => 'historycoolkids']],
 	['pk' => 'not a number'],
 	['pk' => '3456789012345678000', 'taken_at' => 1791640000],
-]]], 'status' => 'ok']) ?: '';
-$result = InstagramProfilesPage::parseStories($api, '2461212201');
+];
+$result = InstagramProfilesPage::parseStoriesPage(storiesPage([['id' => '787132', 'items' => [$items[1]]], ['id' => '2461212201', 'items' => $items]]), '2461212201');
 check('stories ok', $result['error'], '');
-check('stories, newest first, with media only', array_column($result['stories'], 'id'), ['3456789012345678999', '3456789012345678901']);
+check('stories of the profile, newest first, with media only', array_column($result['stories'], 'id'), ['3456789012345678999', '3456789012345678901']);
 [$videoStory, $imageStory] = $result['stories'];
 check('story picture: widest up to 1080', $imageStory['image'], 'https://scontent.cdninstagram.com/1080.jpg');
 check('story link unwrapped, javascript dropped', $imageStory['links'], [['url' => 'https://example.com/a?b=1', 'title' => 'Read more']]);
-check('story shared post, mention, hashtag, place', [$imageStory['posts'], $imageStory['mentions'], $imageStory['hashtags'], $imageStory['locations']],
+check('story shared post, mention (sticker), hashtag, place', [$imageStory['posts'], $imageStory['mentions'], $imageStory['hashtags'], $imageStory['locations']],
 	[['DeUuuMGCu0t'], ['natgeo'], ['history'], ['Boston']]);
-check('video story', [$videoStory['video'], $videoStory['video_url'], $videoStory['image']],
-	[true, 'https://scontent.cdninstagram.com/v.mp4', 'https://scontent.cdninstagram.com/cover.jpg']);
-$list = json_encode(['reels_media' => [['id' => 2461212201, 'items' => [['pk' => '1', 'taken_at' => 1, 'image_versions2' =>
-	['candidates' => [['url' => 'https://scontent.cdninstagram.com/a.jpg']]]]]]], 'status' => 'ok']) ?: '';
-check('stories as reels_media', array_column(InstagramProfilesPage::parseStories($list, '2461212201')['stories'], 'id'), ['1']);
-check('stories none (logged out)', InstagramProfilesPage::parseStories('{"reels":{},"status":"ok"}', '2461212201'), ['error' => '', 'stories' => []]);
-check('stories failure', InstagramProfilesPage::parseStories('{"message":"login_required","status":"fail"}', '2461212201')['error'], 'login_required');
-check('stories checkpoint', InstagramProfilesPage::parseStories('{"message":"checkpoint_required","checkpoint_url":"/challenge/","status":"fail"}', '1')['error'],
-	'checkpoint_required');
-check('stories HTML answer', InstagramProfilesPage::parseStories('<!DOCTYPE html><html>Login</html>', '1')['error'], 'not JSON');
+check('video story', [$videoStory['video'], $videoStory['video_url'], $videoStory['image'], $videoStory['mentions']],
+	[true, 'https://scontent.cdninstagram.com/v.mp4', 'https://scontent.cdninstagram.com/cover.jpg', []]);	// its author’s own mention left out
+check('stories page without this profile’s stories', InstagramProfilesPage::parseStoriesPage(storiesPage([]), '2461212201'), ['error' => '', 'stories' => []]);
+check('stories page logged out', InstagramProfilesPage::parseStoriesPage('<html><title>Instagram</title><script type="application/json">{}</script></html>', '1')['error'],
+	'no stories data in the page, so the session is probably logged out');
+check('stories page with broken data', InstagramProfilesPage::parseStoriesPage('<script type="application/json">{"xdt_api__v1__feed__reels_media":</script>', '1')['error'],
+	'unreadable stories data');
+check('big stories page', count(InstagramProfilesPage::parseStoriesPage(storiesPage([['id' => '2461212201', 'items' => array_fill(0, 30, $items[0])]], 800000),
+	'2461212201')['stories']), 1);
 
 // --- Session cookies --------------------------------------------------------------------------------------------------
 $sid = '81234567890%3AAbCdEfGhIjKlMn%3A27%3AAYdLongerPart_x-Y';
@@ -224,8 +233,6 @@ check('session: missing', InstagramProfilesPage::sessionCookie('csrftoken=Tok123
 check('session: too short', InstagramProfilesPage::sessionCookie('abc'), null);
 check('session: bad characters', InstagramProfilesPage::sessionCookie("sessionid=$sid\r\nX-Evil: 1"), null);
 check('session: password-like text', InstagramProfilesPage::sessionCookie('my secret pass phrase'), null);
-check('cookie value', InstagramProfilesPage::cookieValue("sessionid=$sid; csrftoken=Tok123", 'csrftoken'), 'Tok123');
-check('cookie value absent', InstagramProfilesPage::cookieValue("sessionid=$sid", 'csrftoken'), '');
 
 // --- Rendering --------------------------------------------------------------------------------------------------------
 $feed = new InstagramProfilesFeed();

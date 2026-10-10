@@ -73,9 +73,10 @@ All of them are stored as `https://www.instagram.com/natgeo/`.
   if it stops working, stories come as alerts again until you paste a new one.
 
 **Use an account made for this.** Instagram may restrict, or ask to verify, an account that it sees reading automatically.
-The session is only used to list the stories of a profile that has one up, at its refreshes, with a browser’s user agent.
-Posts are always read without it. It is kept in your FreshRSS user configuration, like other settings, and never shown
-back.
+The session is only used to open the stories page of a profile that has a story up, at its refreshes, as a browser would;
+reading them this way does not mark them as seen. Posts are always read without it. It is kept in your FreshRSS user
+configuration, like other settings, and never shown back; the cookies Instagram adds are kept in `cookies.txt` of the
+extension’s user data.
 
 ## Limitations
 
@@ -96,10 +97,12 @@ back.
   caching and Retry-After handling are respected. `InstagramProfilesPage` reads the posts from the JSON in the page
   (`contextJSON`), with string scanning rather than regular expressions over the page, as FreshRSS lowers
   `pcre.backtrack_limit`. `InstagramProfilesFeed` renders RSS 2.0, which is given to SimplePie as the feed body.
-  * When the embed says a story is up: with a session, the stories come from Instagram’s API
-    (`/api/v1/feed/reels_media/`), and those the feed already has are left out, as Instagram’s links change at each
-    request; otherwise the time of the latest story comes from the profile page, which Instagram renders with the
-    profile’s data when the request looks like a browser opening it (`Sec-Fetch-*` headers).
+  * When the embed says a story is up: with a session, the stories come from the profile’s stories page, requested as a
+    logged-in browser opens it, where Instagram puts them in the page’s data (its API refuses such requests). Instagram
+    answers the first request with a redirect setting cookies of the device, so the session lives in a cookie jar of the
+    user’s data, kept between refreshes like a browser’s. Stories the feed already has are left out, as Instagram’s links
+    change at each request. Without a session, the time of the latest story comes from the profile page, which Instagram
+    renders with the profile’s data when the request looks like a browser opening it (`Sec-Fetch-*` headers).
   * Photos are linked through `https://www.instagram.com/p/<code>/media/?size=l`, so a post renders the same at every refresh
     and FreshRSS does not take it for updated.
 * `entry_before_display` points the photos and thumbnails of FreshRSS’s pages at the extension’s controller

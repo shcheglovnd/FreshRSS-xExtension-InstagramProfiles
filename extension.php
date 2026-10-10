@@ -27,6 +27,8 @@ final class InstagramProfilesExtension extends Minz_Extension {
 	private const AVATAR_MAX_AGE = 7 * 86_400;
 	/** The file of the user’s data that says whether the Instagram session worked the last time */
 	private const SESSION_STATUS_FILE = 'session.json';
+	/** The file of the user’s data with the cookies of the Instagram session, kept between refreshes like a browser’s */
+	private const COOKIE_JAR_FILE = 'cookies.txt';
 
 	#[\Override]
 	public function init(): void {
@@ -128,7 +130,7 @@ final class InstagramProfilesExtension extends Minz_Extension {
 	private function storyItems(FreshRSS_Feed $feed, array $profile, InstagramProfilesFeed $render): array {
 		$session = $this->session();
 		if ($session !== '' && $profile['id'] !== '') {
-			$stories = $this->stories($feed, $profile, $session);
+			$stories = $this->stories($profile, $session);
 			if ($stories !== null) {
 				$items = [];
 				foreach ($stories as $story) {
@@ -152,44 +154,104 @@ final class InstagramProfilesExtension extends Minz_Extension {
 	}
 
 	/**
-	 * The profile’s current stories, read with the user’s Instagram session; null when that fails, which is noted for the
-	 * settings page and in the log.
+	 * The profile’s current stories, read from its stories page with the user’s Instagram session; null when that fails, which
+	 * is noted for the settings page and in the log.
 	 * @param Profile $profile
 	 * @return list<Story>|null
 	 */
-	private function stories(FreshRSS_Feed $feed, array $profile, string $session): ?array {
-		$apiUrl = InstagramProfilesPage::storiesApiUrl($profile['id']);
-		// FreshRSS’s cache is shared by its users: keyed by the session too
-		$cache = $feed->cacheFilename($apiUrl . '#' . sha1($session));
-		$headers = [
-			'Accept: */*',
-			'X-IG-App-ID: ' . InstagramProfilesPage::WEB_APP_ID,
-			'X-Requested-With: XMLHttpRequest',
-			'Referer: ' . InstagramProfilesPage::storiesUrl($profile['user']),
-		];
-		$csrfToken = InstagramProfilesPage::cookieValue($session, 'csrftoken');
-		if ($csrfToken !== '') {
-			$headers[] = 'X-CSRFToken: ' . $csrfToken;
-		}
-		$response = FreshRSS_http_Util::httpGet($apiUrl, $cache, 'json', $feed->attributes(), [
-			CURLOPT_HTTPHEADER => $headers,
-			CURLOPT_USERAGENT => self::BROWSER_USER_AGENT,
-			CURLOPT_COOKIE => $session,	// not sent on to another site if redirected
-		] + $feed->curlOptions());
-		$result = $response['fail'] ? ['error' => self::failure($response), 'stories' => []]
-			: InstagramProfilesPage::parseStories($response['body'], $profile['id']);
-		if ($result['error'] === '' && $result['stories'] === []) {
-			// The embed says a story is up: Instagram answers so to a session that is not logged in
-			$result['error'] = 'no story in the answer, so the session is probably logged out';
-		}
+	private function stories(array $profile, string $session): ?array {
+		[$html, $error] = $this->storiesPage($profile['user'], $session);
+		$result = $error !== '' ? ['error' => $error, 'stories' => []] : InstagramProfilesPage::parseStoriesPage($html, $profile['id']);
 		$this->saveSessionStatus($result['error']);
 		if ($result['error'] !== '') {
-			@unlink($cache);
 			Minz_Log::warning('Instagram Profiles: the stories of @' . $profile['user'] . ' could not be read with the Instagram session: '
 				. $result['error']);
 			return null;
 		}
 		return $result['stories'];
+	}
+
+	/**
+	 * A profile’s stories page, requested as a logged-in browser opens it: Instagram serves its stories there, whereas its API
+	 * refuses such requests. Its first answer is a redirect that sets cookies of the device, which the page needs, so the session
+	 * lives in a cookie jar of the user’s data, kept between refreshes like a browser’s: the same device each time, and the
+	 * cookies that Instagram renews. FreshRSS’s HTTP client drops cookies between redirects, hence cURL itself, with FreshRSS’s
+	 * proxy settings.
+	 * @return array{0:string,1:string} the page, and why it could not be read ('' when it could)
+	 */
+	private function storiesPage(string $user, string $session): array {
+		$dir = $this->getExtensionUserPath();
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0770, true);
+		}
+		$jar = $dir . '/' . self::COOKIE_JAR_FILE;
+		$lock = @fopen($jar . '.lock', 'c');
+		if ($lock !== false) {
+			flock($lock, LOCK_EX);	// refreshes may overlap
+		}
+		try {
+			if (!is_file($jar) && !self::writeCookieJar($jar, $session)) {
+				return ['', 'could not write ' . $jar];
+			}
+			$ch = curl_init(InstagramProfilesPage::storiesUrl($user));
+			if ($ch === false) {
+				return ['', 'cURL'];
+			}
+			$timeout = FreshRSS_Context::systemConf()->limits['timeout'] ?? 20;
+			curl_setopt_array($ch, FreshRSS_Context::systemConf()->curl_options);	// e.g. a proxy
+			curl_setopt_array($ch, [
+				CURLOPT_HTTPHEADER => [
+					'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+					'Accept-Language: en-US,en;q=0.9',
+					'Sec-Fetch-Dest: document',
+					'Sec-Fetch-Mode: navigate',
+					'Sec-Fetch-Site: none',
+					'Sec-Fetch-User: ?1',
+					'Upgrade-Insecure-Requests: 1',
+				],
+				CURLOPT_USERAGENT => self::BROWSER_USER_AGENT,
+				CURLOPT_COOKIEFILE => $jar,
+				CURLOPT_COOKIEJAR => $jar,
+				CURLOPT_FOLLOWLOCATION => true,
+				CURLOPT_MAXREDIRS => 3,
+				CURLOPT_RETURNTRANSFER => true,
+				CURLOPT_ENCODING => '',
+				CURLOPT_CONNECTTIMEOUT => $timeout,
+				CURLOPT_TIMEOUT => $timeout,
+			]);
+			if (defined('CURLOPT_PROTOCOLS_STR') && defined('CURLOPT_REDIR_PROTOCOLS_STR')) {
+				curl_setopt($ch, CURLOPT_PROTOCOLS_STR, 'https');
+				curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS_STR, 'https');
+			}
+			$body = curl_exec($ch);
+			$status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+			$error = curl_error($ch);
+			unset($ch);	// which writes the jar
+			@chmod($jar, 0600);
+			if (!is_string($body) || $status !== 200) {
+				return ['', $status > 0 ? 'HTTP ' . $status : ($error !== '' ? $error : '?')];
+			}
+			return [$body, ''];
+		} finally {
+			if ($lock !== false) {
+				flock($lock, LOCK_UN);
+				fclose($lock);
+			}
+		}
+	}
+
+	/** Starts a cookie jar (Netscape format) with the cookies of a session, as a Cookie header’s value */
+	private static function writeCookieJar(string $jar, string $session): bool {
+		$lines = "# Netscape HTTP Cookie File\n";
+		foreach (explode(';', $session) as $pair) {
+			$pair = explode('=', trim($pair), 2);
+			if (count($pair) === 2 && $pair[0] !== '') {
+				$lines .= implode("\t", ['.instagram.com', 'TRUE', '/', 'TRUE', (string)(time() + 365 * 86_400), $pair[0], $pair[1]]) . "\n";
+			}
+		}
+		$written = @file_put_contents($jar, $lines) !== false;
+		@chmod($jar, 0600);
+		return $written;
 	}
 
 	/**
@@ -302,6 +364,7 @@ final class InstagramProfilesExtension extends Minz_Extension {
 		}
 		if ($session !== $this->session()) {
 			$this->saveSessionStatus(null);
+			@unlink($this->getExtensionUserPath() . '/' . self::COOKIE_JAR_FILE);	// a new session starts a new jar
 		}
 		$this->setUserConfiguration([
 			'ttl_minutes' => in_array($minutes, self::TTL_CHOICES, true) ? $minutes : 0,

@@ -8,7 +8,7 @@ declare(strict_types=1);
  *   six latest posts in full (caption, time, every photo of an album), and whether a story is up;
  * * the profile page, which says when the latest story was posted;
  * * a post’s page or embed, which say whose post it is;
- * * with a logged-in Instagram session, the API’s answer listing a profile’s current stories.
+ * * with a logged-in Instagram session, the profile’s stories page, which carries its current stories.
  *
  * Pages are scanned with string functions rather than regular expressions over the whole page: FreshRSS lowers
  * pcre.backtrack_limit to 10000, which such a regex exhausts silently on pages of this size.
@@ -25,8 +25,6 @@ final class InstagramProfilesPage {
 	public const USER_PATTERN = '[A-Za-z0-9._]{1,30}';
 	/** Shortcodes of posts, as in https://www.instagram.com/p/<code>/ */
 	public const CODE_PATTERN = '[A-Za-z0-9_-]{5,40}';
-	/** The app ID that Instagram’s own pages send with their API requests */
-	public const WEB_APP_ID = '936619743392459';
 
 	/** First path segments of instagram.com that are not profiles */
 	private const RESERVED = ['about', 'accounts', 'ajax', 'api', 'ar', 'challenge', 'developer', 'direct', 'download', 'emails',
@@ -72,14 +70,6 @@ final class InstagramProfilesPage {
 	/** @return non-empty-string */
 	public static function storiesUrl(string $user): string {
 		return 'https://www.instagram.com/stories/' . strtolower($user) . '/';
-	}
-
-	/**
-	 * The API listing a profile’s current stories, for a logged-in session; `$userId` is the profile’s numeric ID.
-	 * @return non-empty-string
-	 */
-	public static function storiesApiUrl(string $userId): string {
-		return 'https://www.instagram.com/api/v1/feed/reels_media/?reel_ids=' . $userId;
 	}
 
 	/**
@@ -194,26 +184,29 @@ final class InstagramProfilesPage {
 	}
 
 	/**
-	 * A profile’s current stories, from the API’s answer for a logged-in session.
+	 * A profile’s current stories, from its stories page as Instagram serves it to a logged-in browser: the page carries them in
+	 * the JSON of a script, as `xdt_api__v1__feed__reels_media`. Logged out, the page has no such data.
 	 * @param string $userId the profile’s numeric ID
-	 * @return array{error:string,stories:list<Story>} `error` is empty when the answer is a success, else why it is not
+	 * @return array{error:string,stories:list<Story>} `error` is empty when the page has the stories (maybe none), else why not
 	 */
-	public static function parseStories(string $json, string $userId): array {
-		$data = json_decode($json, true, 512, JSON_BIGINT_AS_STRING);
-		if (!is_array($data)) {
-			return ['error' => 'not JSON', 'stories' => []];
+	public static function parseStoriesPage(string $html, string $userId): array {
+		$key = '"xdt_api__v1__feed__reels_media"';
+		$reels = null;
+		foreach (self::jsonScripts($html, $key) as $script) {
+			$reels = self::find(json_decode($script, true, 512, JSON_BIGINT_AS_STRING), 'xdt_api__v1__feed__reels_media');
+			if (is_array($reels)) {
+				break;
+			}
 		}
-		if (self::str($data, 'status') !== 'ok') {
-			$message = self::clean(self::str($data, 'message'));
-			return ['error' => $message !== '' ? mb_substr($message, 0, 200) : 'status “' . self::str($data, 'status') . '”', 'stories' => []];
+		if (!is_array($reels)) {
+			return ['error' => str_contains($html, $key) ? 'unreadable stories data' : 'no stories data in the page, so the session is probably logged out',
+				'stories' => []];
 		}
-		$reel = self::get($data, 'reels', $userId);
-		if (!is_array($reel)) {
-			foreach (self::items($data, 'reels_media') as $candidate) {
-				if (self::str($candidate, 'id') === $userId) {
-					$reel = $candidate;
-					break;
-				}
+		$reel = null;
+		foreach (self::items($reels, 'reels_media') as $candidate) {
+			if (self::str($candidate, 'id') === $userId) {
+				$reel = $candidate;
+				break;
 			}
 		}
 		$stories = [];
@@ -263,17 +256,6 @@ final class InstagramProfilesPage {
 			}
 		}
 		return implode('; ', $header);
-	}
-
-	/** The value of a cookie in a Cookie header’s value, or '' */
-	public static function cookieValue(string $cookies, string $name): string {
-		foreach (explode(';', $cookies) as $pair) {
-			$pair = explode('=', $pair, 2);
-			if (trim($pair[0]) === $name) {
-				return trim($pair[1] ?? '');
-			}
-		}
-		return '';
 	}
 
 	/** @return Post|null */
@@ -377,6 +359,9 @@ final class InstagramProfilesPage {
 		foreach (self::items($item, 'reel_mentions') as $mention) {
 			$mentions[] = strtolower(self::str($mention, 'user', 'username'));
 		}
+		foreach (self::items($item, 'story_bloks_stickers') as $sticker) {
+			$mentions[] = strtolower(self::str($sticker, 'bloks_sticker', 'sticker_data', 'ig_mention', 'username'));
+		}
 		$hashtags = [];
 		foreach (self::items($item, 'story_hashtags') as $hashtag) {
 			$name = self::str($hashtag, 'hashtag', 'name');
@@ -402,7 +387,7 @@ final class InstagramProfilesPage {
 			'alt' => self::clean(self::str($item, 'accessibility_caption')),
 			'links' => $links,
 			'posts' => $posts,
-			'mentions' => self::users($mentions),
+			'mentions' => self::users($mentions, [strtolower(self::str($item, 'user', 'username'))]),	// not the author
 			'hashtags' => $hashtags,
 			'locations' => $locations,
 		];
@@ -461,6 +446,46 @@ final class InstagramProfilesPage {
 
 	private static function isUser(string $user): bool {
 		return preg_match('/^' . self::USER_PATTERN . '$/', $user) === 1 && trim($user, '.') !== '';
+	}
+
+	/**
+	 * Contents of the page’s `<script type="application/json">` elements that contain a string: string scanning, which
+	 * pcre.backtrack_limit does not limit.
+	 * @return list<string>
+	 */
+	private static function jsonScripts(string $html, string $needle): array {
+		$scripts = [];
+		$offset = 0;
+		while (($open = strpos($html, '<script type="application/json"', $offset)) !== false) {
+			$start = strpos($html, '>', $open);
+			$close = $start === false ? false : strpos($html, '</script>', $start);
+			if ($start === false || $close === false) {
+				break;
+			}
+			$script = substr($html, $start + 1, $close - $start - 1);
+			if (str_contains($script, $needle)) {
+				$scripts[] = $script;
+			}
+			$offset = $close + strlen('</script>');
+		}
+		return $scripts;
+	}
+
+	/** The first value of a key anywhere in decoded JSON, depth first */
+	private static function find(mixed $data, string $key): mixed {
+		if (!is_array($data)) {
+			return null;
+		}
+		if (array_key_exists($key, $data)) {
+			return $data[$key];
+		}
+		foreach ($data as $value) {
+			$found = self::find($value, $key);
+			if ($found !== null) {
+				return $found;
+			}
+		}
+		return null;
 	}
 
 	/**

@@ -11,6 +11,7 @@ First release.
   and paid partnerships, the exact time, and the profile picture as the feed icon.
 * Photos are shown through FreshRSS, which keeps them in its cache: browsers refuse those of Instagram’s CDN on other sites.
 * Stories: an alert entry when a newer story is up, without an account; with the session cookie of an Instagram account in
-  the settings, the stories themselves, their pictures kept for 30 days. The settings page says whether the session works.
+  the settings, the stories themselves, read from the profile’s stories page as a logged-in browser opens it, their pictures
+  kept for 30 days. The settings page says whether the session works.
 * Default refresh interval for new profiles: a setting.
 * Works on FreshRSS 1.28 and newer.
