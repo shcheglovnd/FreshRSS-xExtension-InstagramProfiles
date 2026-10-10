@@ -1,0 +1,45 @@
+<?php
+
+return [
+	'instagram_profiles' => [
+		'intro' => 'Follow a public Instagram profile with “Add a feed” and its link, e.g. <code>https://www.instagram.com/natgeo/</code>; a link to one of its posts works too. Posts are read from the profile’s embed, which Instagram serves to anyone — no account needed. Each refresh sees the latest 6 posts, with every photo of an album, which your feed then keeps collecting.',
+		'ttl' => 'Refresh interval for new profiles',
+		'ttl_freshrss' => 'FreshRSS default',
+		'minutes' => '%d minutes',
+		'hours' => '%d h',
+		'ttl_help' => 'Applied when a profile is added. A refresh sees only the latest 6 posts, so use a shorter interval for accounts that post a lot.',
+		'story_alerts' => 'Alert when a profile posts a story',
+		'story_alerts_help' => 'Instagram shows stories to logged-in visitors only. Without a session below, a feed gets an entry “New story” linking to them, which opens in the Instagram app on a phone.',
+		'session' => [
+			'title' => 'Instagram session, for stories',
+			'placeholder_saved' => 'saved — paste another one to replace it',
+			'unused' => 'A session is saved. It is used when a profile has a story up.',
+			'ok' => 'The session works (since %s).',
+			'ko' => 'The session does not work since %s: %s. Stories come as alerts until you paste a new one.',
+			'remove' => 'Remove the session',
+			'help' => 'With the <code>sessionid</code> cookie of an Instagram account, feeds get the stories themselves, with their pictures and videos. Better use an account made for this: Instagram may restrict an account that reads it automatically. Log in at instagram.com in a private window of a desktop browser, copy the value of the <code>sessionid</code> cookie (developer tools → Application or Storage → Cookies), and close the window without logging out, which would end the session. Posts are always read without it.',
+			'invalid' => 'Instagram Profiles: that is not a session — paste the value of the sessionid cookie',
+		],
+		'label' => [
+			'photo' => 'Photo',
+			'video' => 'Video',
+			'album' => 'Album',
+			'watch' => 'Watch on Instagram',
+			'with' => 'With %s',
+			'partnership' => 'Paid partnership',
+			'partnership_with' => 'Paid partnership with %s',
+			'new_story' => 'New story',
+			'story_posted' => '%s posted a story.',
+			'story_open' => 'Watch it on Instagram',
+			'story' => 'Story',
+			'video_story' => 'Video story',
+			'shared_post' => 'Shared post',
+			'description' => 'Instagram posts of @%s',
+		],
+		'error' => [
+			'fetch' => 'Instagram: could not load %s (%s)',
+			'no_profile' => 'Instagram: no posts of @%s — unknown, private or suspended account, or Instagram changed its embed (%s)',
+			'post' => 'Instagram: could not find whose post %s is',
+		],
+	],
+];

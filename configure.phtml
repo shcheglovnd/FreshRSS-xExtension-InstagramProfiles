@@ -1,0 +1,62 @@
+<?php
+declare(strict_types=1);
+/** @var InstagramProfilesExtension $this */
+$session = $this->session();
+$status = $session === '' ? null : $this->sessionStatus();
+?>
+<p><?= _t('ext.instagram_profiles.intro') ?></p>
+<form action="<?= _url('extension', 'configure', 'e', urlencode($this->getName())) ?>" method="post" autocomplete="off">
+	<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
+	<div class="form-group">
+		<label class="group-name" for="ttl_minutes"><?= _t('ext.instagram_profiles.ttl') ?></label>
+		<div class="group-controls">
+			<select id="ttl_minutes" name="ttl_minutes">
+				<?php foreach (InstagramProfilesExtension::TTL_CHOICES as $minutes) { ?>
+				<option value="<?= $minutes ?>"<?= $minutes === $this->ttlMinutes() ? ' selected="selected"' : '' ?>><?=
+					$minutes === 0 ? _t('ext.instagram_profiles.ttl_freshrss') : ($minutes < 60
+						? _t('ext.instagram_profiles.minutes', $minutes) : _t('ext.instagram_profiles.hours', intdiv($minutes, 60)))
+				?></option>
+				<?php } ?>
+			</select>
+			<p class="help"><?= _i('help') ?> <?= _t('ext.instagram_profiles.ttl_help') ?></p>
+		</div>
+	</div>
+	<div class="form-group">
+		<div class="group-controls">
+			<label class="checkbox" for="story_alerts">
+				<input type="checkbox" id="story_alerts" name="story_alerts" value="1"<?= $this->storyAlerts() ? ' checked="checked"' : '' ?> />
+				<?= _t('ext.instagram_profiles.story_alerts') ?>
+			</label>
+			<p class="help"><?= _i('help') ?> <?= _t('ext.instagram_profiles.story_alerts_help') ?></p>
+		</div>
+	</div>
+	<div class="form-group">
+		<label class="group-name" for="session"><?= _t('ext.instagram_profiles.session.title') ?></label>
+		<div class="group-controls">
+			<input type="text" id="session" name="session" value="" autocomplete="off" spellcheck="false" placeholder="<?=
+				$session === '' ? 'sessionid' : _t('ext.instagram_profiles.session.placeholder_saved') ?>" />
+			<?php if ($session !== '') { ?>
+			<p><?php
+				if ($status === null) {
+					echo _t('ext.instagram_profiles.session.unused');
+				} elseif ($status['ok']) {
+					echo _t('ext.instagram_profiles.session.ok', timestamptodate($status['since']));
+				} else {
+					echo _t('ext.instagram_profiles.session.ko', timestamptodate($status['since']), htmlspecialchars($status['error'], ENT_NOQUOTES, 'UTF-8'));
+				}
+			?></p>
+			<label class="checkbox" for="session_remove">
+				<input type="checkbox" id="session_remove" name="session_remove" value="1" />
+				<?= _t('ext.instagram_profiles.session.remove') ?>
+			</label>
+			<?php } ?>
+			<p class="help"><?= _i('help') ?> <?= _t('ext.instagram_profiles.session.help') ?></p>
+		</div>
+	</div>
+	<div class="form-group form-actions">
+		<div class="group-controls">
+			<button type="submit" class="btn btn-important"><?= _t('gen.action.submit') ?></button>
+			<button type="reset" class="btn"><?= _t('gen.action.cancel') ?></button>
+		</div>
+	</div>
+</form>

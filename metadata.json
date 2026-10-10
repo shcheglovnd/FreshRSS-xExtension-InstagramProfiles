@@ -1,0 +1,8 @@
+{
+	"name": "Instagram Profiles",
+	"author": "shcheglovnd",
+	"description": "Follow public Instagram profiles without an account: the latest posts with every photo of an album, read from the profile’s public embed, and an alert when a story is up — or, with an Instagram session, the stories themselves.",
+	"version": "0.1.0",
+	"entrypoint": "InstagramProfiles",
+	"type": "user"
+}
