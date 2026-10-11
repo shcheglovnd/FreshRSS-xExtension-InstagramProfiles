@@ -116,18 +116,23 @@ final class InstagramProfilesFeed {
 
 	/**
 	 * A story, read with an Instagram session. Its picture is Instagram’s link, which expires after a few days, marked with
-	 * `#ig-story-<id>` for FreshRSS to show the copy it keeps ({@see InstagramProfilesMedia}); a video is its cover, linked to it.
+	 * `#ig-story-<id>` for FreshRSS to show the copy it keeps ({@see InstagramProfilesMedia}). A video is played from the copy
+	 * FreshRSS keeps when `$video` says there is one (its link marked `#ig-story-video-<id>`), else is its cover, linked to it.
 	 * @param Profile $profile
 	 * @param Story $story
 	 * @return Item
 	 */
-	public function story(array $profile, array $story): array {
-		$link = InstagramProfilesPage::storiesUrl($profile['user']) . $story['id'] . '/';
+	public function story(array $profile, array $story, bool $video = false): array {
+		$link = self::storyLink($profile['user'], $story['id']);
 		$size = $story['width'] > 0 && $story['height'] > 0 ? ' width="' . $story['width'] . '" height="' . $story['height'] . '"' : '';
 		$label = $this->labels[$story['video'] ? 'video_story' : 'story'];
 		$image = $story['image'] !== '' ? $story['image'] . '#ig-story-' . $story['id'] : '';
 		$html = $image === '' ? '' : '<img src="' . self::esc($image) . '"' . $size . ' alt="' . self::esc($story['alt'] !== '' ? $story['alt'] : $label) . '" />';
-		if ($story['video']) {
+		if ($story['video'] && $video && $story['video_url'] !== '') {
+			// Without width and height: FreshRSS limits a video’s width only, so its height would stay, with bands; the poster sizes it
+			$html = '<p><video controls="controls" preload="none"' . ($image !== '' ? ' poster="' . self::esc($image) . '"' : '')
+				. ' src="' . self::esc($story['video_url'] . '#ig-story-video-' . $story['id']) . '"></video></p>' . "\n";
+		} elseif ($story['video']) {
 			$html = '<p>' . ($html !== '' ? '<a href="' . self::esc($link) . '">' . $html . '</a><br />' : '')
 				. '▶ <a href="' . self::esc($link) . '">' . self::esc($label . ' · ' . $this->labels['watch']) . "</a></p>\n";
 		} elseif ($html !== '') {
@@ -164,6 +169,11 @@ final class InstagramProfilesFeed {
 			'html' => $html,
 			'image' => $image,
 		];
+	}
+
+	/** A story’s link on Instagram, also its entry’s guid */
+	public static function storyLink(string $user, string $id): string {
+		return InstagramProfilesPage::storiesUrl($user) . $id . '/';
 	}
 
 	/**

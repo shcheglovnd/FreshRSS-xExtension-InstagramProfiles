@@ -10,6 +10,8 @@ return [
 		'ttl_help' => 'Applied when a profile is added. A refresh sees only the latest 6 posts, so use a shorter interval for accounts that post a lot.',
 		'story_alerts' => 'Alert when a profile posts a story',
 		'story_alerts_help' => 'Instagram shows stories to logged-in visitors only. Without a session below, a feed gets an entry “New story” linking to them, which opens in the Instagram app on a phone.',
+		'story_videos' => 'Save the videos of stories',
+		'story_videos_help' => 'With a session, a video story is downloaded when it arrives and kept 30 days in FreshRSS’s cache, like the pictures, so that it plays in FreshRSS after it has expired on Instagram. Usually 1 to 10 MB each; videos over 50 MB are skipped. Otherwise a video story shows its cover, linked to Instagram. Applies to stories that arrive after it is switched on.',
 		'session' => [
 			'title' => 'Instagram session, for stories',
 			'placeholder_saved' => 'saved — paste another one to replace it',
@@ -17,7 +19,7 @@ return [
 			'ok' => 'The session works (since %s).',
 			'ko' => 'The session does not work since %s: %s. Stories come as alerts until you paste a new one.',
 			'remove' => 'Remove the session',
-			'help' => 'With the <code>sessionid</code> cookie of an Instagram account, feeds get the stories themselves, with their pictures and videos. Better use an account made for this: Instagram may restrict an account that reads it automatically. Log in at instagram.com in a private window of a desktop browser, copy the value of the <code>sessionid</code> cookie (developer tools → Application or Storage → Cookies), and close the window without logging out, which would end the session. Posts are always read without it.',
+			'help' => 'With the <code>sessionid</code> cookie of an Instagram account, feeds get the stories themselves, with their pictures, and their videos if you choose so below. Better use an account made for this: Instagram may restrict an account that reads it automatically. Log in at instagram.com in a private window of a desktop browser, copy the value of the <code>sessionid</code> cookie (developer tools → Application or Storage → Cookies), and close the window without logging out, which would end the session. Posts are always read without it.',
 			'invalid' => 'Instagram Profiles: that is not a session — paste the value of the sessionid cookie',
 		],
 		'label' => [

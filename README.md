@@ -25,7 +25,7 @@ themselves.
   * without a session, an entry **“New story”** for each refresh that finds a newer story, dated by it and linked to the
     profile’s stories (on a phone, they open in the Instagram app);
   * with a session, **each story as an entry**: its picture, or a video’s cover linked to it, with its links, mentions,
-    hashtags, place and shared post.
+    hashtags, place and shared post. With *Save the videos of stories*, a video story plays in FreshRSS instead.
 
 ### Photos are served by FreshRSS
 
@@ -34,7 +34,8 @@ them in FreshRSS. In FreshRSS’s pages the extension therefore shows them throu
 `./?c=instagramProfiles&a=media&post=<code>` downloads a post’s photo through Instagram’s own redirect
 `https://www.instagram.com/p/<code>/media/?size=l`, which keeps working, and keeps it in FreshRSS’s cache. FreshRSS empties
 its cache of files older than 30 days; a photo is then downloaded again when shown. A story’s picture is downloaded when the
-story is read, as its link expires with it, and is kept 30 days.
+story is read, as its link expires with it, and is kept 30 days; so is its video, if so set. Videos are served with byte
+ranges, which browsers on phones need to play them.
 
 This works for logged-in users (and anonymous readers if FreshRSS allows them). Elsewhere, entries keep Instagram’s links:
 the RSS output and the API used by apps, which load them as they are.
@@ -66,6 +67,10 @@ All of them are stored as `https://www.instagram.com/natgeo/`.
 
 * **Refresh interval for new profiles.** FreshRSS’s default unless you choose one.
 * **Alert when a profile posts a story.** On by default.
+* **Save the videos of stories.** Off by default. With a session, a video story is downloaded when it arrives and kept
+  30 days in FreshRSS’s cache, so that it plays in FreshRSS after it has expired on Instagram. Usually 1 to 10 MB each
+  (15-second ones, a few hundred KB); videos over 50 MB are skipped. It applies to stories that arrive after it is switched
+  on.
 * **Instagram session, for stories.** The value of the `sessionid` cookie of an Instagram account; a whole Cookie header
   works too. To get it, log in at instagram.com in a private window of a desktop browser, open the developer tools
   (*Application* or *Storage* → *Cookies* → `https://www.instagram.com`), copy `sessionid`, and close the window
@@ -84,7 +89,7 @@ extension’s user data.
 * **Six posts per refresh**, as explained above.
 * **Tied to Instagram’s embed.** If Instagram changes it, or stops serving it, the extension needs an update; feeds then
   show an error instead of silently going empty.
-* **Videos are not played in FreshRSS**: their cover links to Instagram.
+* **Videos of posts and reels are not played in FreshRSS**: their cover links to Instagram. Videos of stories are, if so set.
 * **Stories need a session**; without one, only alerts. Story pictures are kept 30 days.
 * **Disabling the extension breaks these feeds**, and FreshRSS’s pages then show no photos.
 * **Instagram’s terms.** Reading public pages this way is for personal use. Keep refresh intervals moderate.

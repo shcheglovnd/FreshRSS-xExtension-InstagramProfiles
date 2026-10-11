@@ -289,6 +289,10 @@ check('video story: its cover, linked', $videoItem['html'], '<p><a href="https:/
 	. '▶ <a href="https://www.instagram.com/stories/historycoolkids/3456789012345678999/">Video story · Watch on Instagram</a></p>' . "\n");
 check('story thumbnail marked', $videoItem['image'], 'https://scontent.cdninstagram.com/cover.jpg#ig-story-3456789012345678999');
 check('video story title', $videoItem['title'], 'Video story');
+$playable = $feed->story($profile, ['width' => 720, 'height' => 1280] + $videoStory, true);
+check('video story with its video kept', $playable['html'], '<p><video controls="controls" preload="none" poster="https://scontent.cdninstagram.com/cover.jpg#ig-story-3456789012345678999"'
+	. ' src="https://scontent.cdninstagram.com/v.mp4#ig-story-video-3456789012345678999"></video></p>' . "\n");
+check('picture story ignores the video flag', $feed->story($profile, $imageStory, true)['html'], $storyItem['html']);
 
 $labels = (new InstagramProfilesFeed(['new_story' => 'Новая история']))->storyAlert($profile, 1);
 check('labels in another language', $labels['title'], 'Новая история');
@@ -323,8 +327,19 @@ file_put_contents(InstagramProfilesMedia::storyPath('3456789012345678999'), "\xF
 check('rewrite story picture kept', InstagramProfilesMedia::rewrite($storyHtml, $proxy), '<img src="./?c=instagramProfiles&amp;a=media&amp;story=3456789012345678999" />');
 $many = str_repeat('<a href="https://www.instagram.com/explore/tags/' . str_repeat('x', 200) . '/">#x</a> ', 2000) . $storyHtml;
 check('rewrite under the backtrack limit', str_ends_with(InstagramProfilesMedia::rewrite($many, $proxy), 'story=3456789012345678999" />'), true);
-check('picture types', array_map(InstagramProfilesMedia::type(...), ["\xFF\xD8\xFF\xDB", "\x89PNG\r\n\x1A\nxx", 'GIF89a', 'RIFF1234WEBPVP8 ', '<!DOCTYPE html>', '']),
-	['image/jpeg', 'image/png', 'image/gif', 'image/webp', null, null]);
+check('picture and video types', array_map(InstagramProfilesMedia::type(...), ["\xFF\xD8\xFF\xDB", "\x89PNG\r\n\x1A\nxx", 'GIF89a', 'RIFF1234WEBPVP8 ',
+	"\x00\x00\x00\x1Cftypisom", "\x1A\x45\xDF\xA3\x01", '<!DOCTYPE html>', '']), ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/webm', null, null]);
+$ranges = ['' => null, 'bytes=0-1' => [0, 1], 'bytes=0-' => [0, 999], 'bytes=500-' => [500, 999], 'bytes=-100' => [900, 999], 'bytes=990-2000' => [990, 999],
+	'bytes=1000-' => false, 'bytes=5-4' => false, 'bytes=-0' => false, 'bytes=0-1,5-6' => null, 'items=0-1' => null, 'bytes=-' => null];
+foreach ($ranges as $header => $expected) {
+	check("range '$header' of 1000 bytes", InstagramProfilesMedia::range($header, 1000), $expected);
+}
+$videoHtml = '<video poster="https://scontent.cdninstagram.com/c.jpg?a=1&amp;b=2#ig-story-4001" src="https://scontent.cdninstagram.com/v.mp4?a=1&amp;b=2#ig-story-video-4001"></video>';
+check('rewrite story video not kept', InstagramProfilesMedia::rewrite($videoHtml, $proxy), $videoHtml);
+file_put_contents(InstagramProfilesMedia::storyVideoPath('4001'), "\x00\x00\x00\x1Cftypisom fake");
+file_put_contents(InstagramProfilesMedia::storyPath('4001'), "\xFF\xD8\xFF\xE0fake jpeg");
+check('rewrite story video and its cover kept', InstagramProfilesMedia::rewrite($videoHtml, $proxy),
+	'<video poster="./?c=instagramProfiles&amp;a=media&amp;story=4001" src="./?c=instagramProfiles&amp;a=media&amp;video=4001"></video>');
 array_map('unlink', glob(CACHE_PATH . '/*') ?: []);
 @rmdir(CACHE_PATH);
 

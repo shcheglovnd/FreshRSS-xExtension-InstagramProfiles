@@ -13,5 +13,7 @@ First release.
 * Stories: an alert entry when a newer story is up, without an account; with the session cookie of an Instagram account in
   the settings, the stories themselves, read from the profile’s stories page as a logged-in browser opens it, their pictures
   kept for 30 days. The settings page says whether the session works.
+* Story videos can be kept too (a setting, off by default): downloaded when the story arrives, kept 30 days, played in
+  FreshRSS, served with byte ranges for phones.
 * Default refresh interval for new profiles: a setting.
 * Works on FreshRSS 1.28 and newer.

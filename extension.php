@@ -123,7 +123,8 @@ final class InstagramProfilesExtension extends Minz_Extension {
 
 	/**
 	 * Items for a profile with a story up: its stories that the feed does not have yet when the Instagram session works, their
-	 * pictures kept in the cache, as their links expire; otherwise an alert dated by the latest story, if alerts are on.
+	 * pictures, and videos if so set, kept in the cache, as their links expire; otherwise an alert dated by the latest story,
+	 * if alerts are on.
 	 * @param Profile $profile
 	 * @return list<Item>
 	 */
@@ -133,17 +134,19 @@ final class InstagramProfilesExtension extends Minz_Extension {
 			$stories = $this->stories($profile, $session);
 			if ($stories !== null) {
 				$items = [];
-				foreach ($stories as $story) {
-					$items[$story['id']] = $render->story($profile, $story);
-				}
-				$items = $this->newItems($feed, $items);
-				foreach ($stories as $story) {
-					$path = InstagramProfilesMedia::storyPath($story['id']);
-					if (isset($items[$story['id']]) && $story['image'] !== '' && !InstagramProfilesMedia::cached($path)) {
-						InstagramProfilesMedia::download($story['image'], $path);
+				foreach ($this->newStories($feed, $profile, $stories) as $story) {
+					$picture = InstagramProfilesMedia::storyPath($story['id']);
+					if ($story['image'] !== '' && !InstagramProfilesMedia::cached($picture)) {
+						InstagramProfilesMedia::download($story['image'], $picture);
 					}
+					$video = false;
+					if ($story['video'] && $story['video_url'] !== '' && $this->storyVideos()) {
+						$path = InstagramProfilesMedia::storyVideoPath($story['id']);
+						$video = InstagramProfilesMedia::cached($path) || InstagramProfilesMedia::downloadVideo($story['video_url'], $path);
+					}
+					$items[] = $render->story($profile, $story, $video);
 				}
-				return array_values($items);
+				return $items;
 			}
 		}
 		if (!$this->storyAlerts()) {
@@ -255,17 +258,28 @@ final class InstagramProfilesExtension extends Minz_Extension {
 	}
 
 	/**
-	 * Leaves out the items that the feed already has. Instagram’s links to the pictures of stories change at each request,
-	 * so FreshRSS would otherwise update those entries at each refresh, and mark them unread again if so set.
-	 * @param array<string,Item> $items
-	 * @return array<string,Item>
+	 * Leaves out the stories that the feed already has. Instagram’s links to their pictures change at each request, so FreshRSS
+	 * would otherwise update those entries at each refresh, and mark them unread again if so set.
+	 * @param Profile $profile
+	 * @param list<Story> $stories
+	 * @return list<Story>
 	 */
-	private function newItems(FreshRSS_Feed $feed, array $items): array {
-		if ($feed->id() <= 0 || $items === []) {
-			return $items;
+	private function newStories(FreshRSS_Feed $feed, array $profile, array $stories): array {
+		if ($feed->id() <= 0 || $stories === []) {
+			return $stories;
 		}
-		$known = FreshRSS_Factory::createEntryDao()->listHashForFeedGuids($feed->id(), array_values(array_column($items, 'guid')));
-		return array_filter($items, static fn(array $item): bool => !isset($known[$item['guid']]));
+		$guids = [];
+		foreach ($stories as $story) {
+			$guids[$story['id']] = InstagramProfilesFeed::storyLink($profile['user'], $story['id']);
+		}
+		$known = FreshRSS_Factory::createEntryDao()->listHashForFeedGuids($feed->id(), array_values($guids));
+		$new = [];
+		foreach ($stories as $story) {
+			if (!isset($known[$guids[$story['id']]])) {
+				$new[] = $story;
+			}
+		}
+		return $new;
 	}
 
 	/**
@@ -369,6 +383,7 @@ final class InstagramProfilesExtension extends Minz_Extension {
 		$this->setUserConfiguration([
 			'ttl_minutes' => in_array($minutes, self::TTL_CHOICES, true) ? $minutes : 0,
 			'story_alerts' => Minz_Request::paramBoolean('story_alerts'),
+			'story_videos' => Minz_Request::paramBoolean('story_videos'),
 			'session' => $session,
 		]);
 		$back = ['c' => 'extension', 'a' => 'configure', 'params' => ['e' => $this->getName()]];
@@ -388,6 +403,11 @@ final class InstagramProfilesExtension extends Minz_Extension {
 	public function storyAlerts(): bool {
 		$enabled = $this->getUserConfigurationValue('story_alerts');
 		return is_bool($enabled) ? $enabled : true;
+	}
+
+	/** Whether the videos of stories are kept too, with a session */
+	public function storyVideos(): bool {
+		return $this->getUserConfigurationValue('story_videos') === true;
 	}
 
 	/** The Instagram session’s cookies, as a Cookie header’s value, or '' */

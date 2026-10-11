@@ -15,12 +15,13 @@ final class FreshExtension_instagramProfiles_Controller extends Minz_ActionContr
 		}
 	}
 
-	/** `?c=instagramProfiles&a=media&post=<shortcode>` or `&story=<id>` */
+	/** `?c=instagramProfiles&a=media&post=<shortcode>`, `&story=<id>` (its picture) or `&video=<id>` (a story’s video) */
 	public function mediaAction(): void {
 		require_once dirname(__DIR__) . '/lib/InstagramProfilesPage.php';
 		require_once dirname(__DIR__) . '/lib/InstagramProfilesMedia.php';
 		$code = Minz_Request::paramString('post');
 		$id = Minz_Request::paramString('story');
+		$video = Minz_Request::paramString('video');
 		if (preg_match('/^' . InstagramProfilesPage::CODE_PATTERN . '$/', $code) === 1) {
 			$path = InstagramProfilesMedia::postPath($code);
 			if (!InstagramProfilesMedia::cached($path)) {
@@ -28,6 +29,8 @@ final class FreshExtension_instagramProfiles_Controller extends Minz_ActionContr
 			}
 		} elseif (preg_match('/^\d{1,30}$/', $id) === 1) {
 			$path = InstagramProfilesMedia::storyPath($id);	// kept when the story was read: its link has expired since
+		} elseif (preg_match('/^\d{1,30}$/', $video) === 1) {
+			$path = InstagramProfilesMedia::storyVideoPath($video);
 		} else {
 			header('HTTP/1.1 400 Bad Request');
 			exit('Bad Request');
